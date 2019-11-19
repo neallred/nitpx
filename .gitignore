@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+screenshots/*
+!screenshots/.gitkeep
+tmp
+config.json
