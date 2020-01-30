@@ -92,7 +92,6 @@ pub fn capture_snapshots(
     let mut out_trusted = File::create(filepath_trusted)?;
     out_trusted.write(&pic_trusted)?;
 
-    println!("Saved trusted pic_trusted.");
 
 
 
@@ -128,7 +127,6 @@ pub fn capture_snapshots(
     let mut out_testing = File::create(filepath_testing)?;
     out_testing.write(&pic_testing)?;
 
-    println!("Saved testing pic_testing.");
 
     let images_are_same = pic_trusted_len == pic_testing_len &&
         md5::compute(pic_trusted) == md5::compute(pic_testing);

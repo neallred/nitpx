@@ -44,6 +44,31 @@ impl Error for DiffError {
     }
 }
 
+// TODO: Better error for diffs
+#[derive(Debug)]
+pub struct SkipError {
+}
+
+impl SkipError {
+    pub fn new() -> SkipError {
+        SkipError{}
+    }
+}
+
+impl fmt::Display for SkipError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"skip")
+    }
+}
+
+impl Error for SkipError {
+    fn description(&self) -> &str {
+        "what goes here?"
+        // format!("{}", %self.pct_diff)
+        // String::from(self.pct_diff.to_string().clone())
+    }
+}
+
 use image::{
     GenericImageView,
     Rgba,

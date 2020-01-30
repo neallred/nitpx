@@ -14,7 +14,7 @@ Pages with nondeterministic content or content that dynamically changes without 
 1. Add the following as environment variables, configured to your use case. The example below setup assumes a bash shell.
 
 ```
-export NIT_PX_FROM_SITEMAP="true"
+export NIT_PX_ROUTES="blog,explore,about"
 export NIT_PX_IGNORED_ROUTES="huge-route,broken/route"
 export NIT_PX_SCREENSHOT_DIR="/path/to/where/you/want/to/store/screenshots"
 export NIT_PX_TESTING="https://changed.version-of.site/"
