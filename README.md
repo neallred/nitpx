@@ -15,8 +15,8 @@ Pages with nondeterministic content or content that dynamically changes without 
 
 ```
 export NIT_PX_ROUTES="blog,explore,about"
-export NIT_PX_IGNORED_ROUTES="huge-route,broken/route"
-export NIT_PX_SCREENSHOT_DIR="/path/to/where/you/want/to/store/screenshots"
+export NIT_PX_IGNORED="huge-route,broken/route"
+export NIT_PX_SCREENSHOTS="/path/to/where/you/want/to/store/screenshots"
 export NIT_PX_TESTING="https://changed.version-of.site/"
 export NIT_PX_TRUSTED="https://trusted.domain.com/"
 ```
