@@ -1,28 +1,25 @@
 use std::error::Error;
-use nit_px;
+use nitpx;
 use colored::*;
 
-use headless_chrome::Browser;
-
-fn test(url: &String, browser: &Browser) -> Result<(), Box<dyn Error>> {
-    let config = nit_px::config::make_config();
+fn test(url: &String) -> Result<(), Box<dyn Error>> {
+    let config = nitpx::config::make_config();
 
     let slug = url.replace(&config.trusted_url, "");
     println!("{}{}{}", "testing \"".underline(), &slug.underline(), "\"".underline());
 
     if config.ignored_routes.contains(&slug)
     {
-        Err(Box::new(nit_px::SkipError::new()))
+        Err(Box::new(nitpx::SkipError::new()))
     } else {
-        let images_identical = nit_px::browser::capture_snapshots(
+        let images_identical = nitpx::browser::capture_snapshots(
             &config.trusted_url,
             &config.testing_url,
             &slug,
-            &browser,
         )?;
 
-        let pic_name = nit_px::url_utils::get_name_from_slug(&slug);
-        nit_px::compare(
+        let pic_name = nitpx::url_utils::get_name_from_slug(&slug);
+        nitpx::compare(
             format!("{}/{}_trusted.png", config.screenshot_dir, pic_name),
             format!("{}/{}_testing.png", config.screenshot_dir, pic_name),
             format!("{}/{}_diff.png", config.screenshot_dir, pic_name),
@@ -32,12 +29,11 @@ fn test(url: &String, browser: &Browser) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let browser = nit_px::browser::make_browser()?;
-    let urls = nit_px::url_utils::get_urls()?;
-    let config = nit_px::config::make_config();
+    let urls = nitpx::url_utils::get_urls()?;
+    let config = nitpx::config::make_config();
 
     // TODO: Collect and output something easier to digest after running through all tests
-    let test_results = urls.iter().map(|url| (url, test(url, &browser)));
+    let test_results = urls.iter().map(|url| (url, test(url)));
     let mut passes: Vec<String> = vec![];
     let mut fails: Vec<String> = vec![];
     for (url, diff_result) in test_results {
@@ -50,16 +46,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                 passes.push(test_summary);
             }
             Err(e) => {
-                let test_summary = format!("{} \"{}\": {:?}\n", "FAIL".black().on_red(), slug, e);
-                println!("{}", test_summary);
-                fails.push(test_summary);
+                let test_summary = format!(
+                    "{} (See \"{}\"): {:?}\n",
+                    "FAIL".black().on_red(),
+                    format!("{}_diff.png", nitpx::url_utils::get_name_from_slug(&slug)),
+                    e
+                );
+
+                println!("{}", test_summary);fails.push(test_summary);
             }
         }
     }
 
-    
     if passes.len() > 0 {
-        println!(
+        print!(
             "{}{}{}",
             "Summary of passing tests: (".underline().green().dimmed(),
             (&passes.len().to_string()).underline().green().dimmed(),
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     if fails.len() > 0 {
-        println!(
+        print!(
             "{}{}{}",
             "Summary of failing tests: (".underline().red().dimmed(),
             (&fails.len().to_string()).underline().red().dimmed(),

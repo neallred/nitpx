@@ -11,6 +11,7 @@ use headless_chrome::{
 use md5;
 
 use super::url_utils;
+use colored::*;
 
 use std::time::Duration;
 use std::thread::sleep;
@@ -23,14 +24,17 @@ fn calculate_render_sleep(px_in_capture: &u32) -> Duration {
     // and this function would calculate a delay of 4 seconds.
 
     // rounding occurs, so don't use from_seconds or too much precision is lost
-    Duration::from_micros((px_in_capture / 10).into())
+
+    // 30 ms delay is an arbitrary amount to account for device/network slowness
+    // TODO: Make these values configurable to users
+    Duration::from_micros((30_000 + px_in_capture / 10).into())
 }
 
 pub fn make_browser() -> Result<Browser, Box<dyn Error>> {
     let browser_options = LaunchOptionsBuilder::default()
         .headless(true)
         .window_size(Some((1600, 1000)))
-        .idle_browser_timeout(Duration::new(120, 0))
+        .idle_browser_timeout(Duration::new(40, 0))
         .build()?;
     let browser = Browser::new(browser_options)?;
     let _tab = browser.wait_for_initial_tab()?;
@@ -41,54 +45,63 @@ pub fn capture_snapshots(
     trusted_domain: &String,
     testing_domain: &String,
     slug: &String,
-    browser: &Browser,
 ) -> Result<bool, Box<dyn Error>> {
+
+    // We make a new browser per test, because a given browser stops responding
+    // after about 20-23 tests.
+    // Maybe there's a cleanup bug and tabs are not properly closed?
+    // It would be more efficient to reuse the same browser for the whole suite.
+
+    let browser = make_browser()?;
     let pic_name = url_utils::get_name_from_slug(&slug);
 
     let filepath_trusted = format!("screenshots/{}_trusted.png", pic_name);
     let filepath_testing = format!("screenshots/{}_testing.png", pic_name);
 
+    println!("{}", "trusted url...".blue().dimmed());
     let tab = browser.new_tab()?;
-    tab.set_default_timeout(Duration::from_secs(120));
-
-    let initial_bounds = tab.get_bounds()?;
-    println!("initial_bounds {:?}", initial_bounds);
+    tab.set_default_timeout(Duration::from_secs(40));
 
     tab.navigate_to(&(trusted_domain.clone() + &slug))?
         .wait_until_navigated()?;
+
+    tab.set_bounds(Bounds::Normal {
+        left: Some(0),
+        top: Some(0),
+        width: Some(1600),
+        height: None,
+    })?;
+
+    let body = tab.wait_for_element("body")?;
+    body.call_js_fn("function() { this.style.overflowY = \"scroll\"; }", false)?;
+    body.move_mouse_over()?;
 
 
     let content_size = tab.wait_for_element("html")?
         .get_box_model()?;
     let viewport = content_size.margin_viewport();
-    // TODO: Scroll bar presence is unreliable,
-    // especially when capturing the testing route
-    // that already has a large viewport set.
-    // If possible, set scrollbar to always show.
 
-    let scrollbar_offset = if content_size.height > initial_bounds.height {
-        0
-    } else {
-        15
-    };
+
+    tab.set_bounds(Bounds::Normal {
+        left: None,
+        top: None,
+        width: None,
+        height: Some(content_size.height + 1)
+    })?;
+
+    // TODO: Clean up code that insures equal scroll bar presence/ page widths.
 
     let estimated_render_time = calculate_render_sleep(&(content_size.width * content_size.height));
 
-    println!("waiting {:?} for testing render...", estimated_render_time);
+    println!("wait {:?} for render...", estimated_render_time);
     sleep(estimated_render_time);
 
-    tab.set_bounds(Bounds::Normal {
-        left: Some(0),
-        top: Some(0),
-        width: Some(content_size.width + scrollbar_offset), // scroll bar
-        height: Some(content_size.height)
-    })?;
-    println!("trusted viewport:\n {:?}", viewport);
-    println!("capturing trusted image...");
+    println!("viewport: w: {:?} h: {:?}", viewport.width, viewport.height);
+    println!("capturing image...");
     let pic_trusted = tab.capture_screenshot(ScreenshotFormat::PNG, Some(viewport ), true)?;
     let pic_trusted_len = pic_trusted.len();
 
-    println!("trusted pic_trusted length:\n {:?}", pic_trusted_len);
+    println!("pic length: {:?}", pic_trusted_len);
     let mut out_trusted = File::create(filepath_trusted)?;
     out_trusted.write(&pic_trusted)?;
 
@@ -99,14 +112,29 @@ pub fn capture_snapshots(
 
 
 
+
+    println!("{}", "testing url...".blue().dimmed());
     tab.navigate_to(&(testing_domain.clone() + &slug))?
         .wait_until_navigated()?;
 
+    let body = tab.wait_for_element("body")?;
+    body.call_js_fn("function() { this.style.overflowY = \"scroll\"; }", false)?;
+    // move mouse to similar place on both of them,
+    // so that the trusted tab is forced to have a mouse hover,
+    // so that testing doesn't get focused elements that trusted url doesn't get
+    body.move_mouse_over()?;
+
+    tab.set_bounds(Bounds::Normal {
+        left: None,
+        top: None,
+        width: Some(1600),
+        height: None,
+    })?;
+
     let content_size = tab.wait_for_element("html")?
         .get_box_model()?;
-    println!("got testing box model...");
     let viewport = content_size.margin_viewport();
-    println!("testing viewport:\n {:?}", viewport);
+    println!("viewport: w: {:?} h: {:?}", viewport.width, viewport.height);
     // To really be sure and get true full snapshots this should probably set_bounds again here.
     // but the getWindowForTarget can return negative top when you grow the top a lot, and if you do
     // that the CurrentBounds type asplodes in parsing. So don't do that...
@@ -117,13 +145,13 @@ pub fn capture_snapshots(
     // "{\"method\":\"Browser.getWindowForTarget\",\"id\":12,\"params\":{\"targetId\":\"D27B318B1E2A43F837C7D05370C72ACD\"}}"
     // thing_to_parse: Object({"bounds": Object({"height": Number(5201), "left": Number(0), "top": Number(-4001), "width": Number(1600), "windowState": String("normal")}), "windowId": Number(1)})
 
-    println!("waiting {:?} for testing render...", estimated_render_time);
+    println!("waiting {:?} for render...", estimated_render_time);
     sleep(estimated_render_time);
-    println!("capturing testing image...");
+    println!("capturing image...");
     let pic_testing = tab.capture_screenshot(ScreenshotFormat::PNG, Some(viewport), true)?;
     let pic_testing_len = pic_testing.len();
 
-    println!("testing pic_testing length:\n {:?}", pic_testing_len);
+    println!("pic length: {:?}", pic_testing_len);
     let mut out_testing = File::create(filepath_testing)?;
     out_testing.write(&pic_testing)?;
 

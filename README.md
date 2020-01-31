@@ -10,8 +10,8 @@ Pages with nondeterministic content or content that dynamically changes without 
 
 
 ## Setup
-1. Install [Rust][install_rust].
-1. Add the following as environment variables, configured to your use case. The example below setup assumes a bash shell.
+*. Install [Rust][install_rust].
+*. Add the following environment variables, configuring values to your use case. The example below setup assumes a bash shell. Note that if `NIT_PX_ROUTES` is set to `"sitemap"`, It will look on the trusted domain for a `/sitemap.xml` and generate routes to test based on that.
 
 ```
 export NIT_PX_ROUTES="blog,explore,about"
@@ -21,7 +21,7 @@ export NIT_PX_TESTING="https://changed.version-of.site/"
 export NIT_PX_TRUSTED="https://trusted.domain.com/"
 ```
 
-1. Run `cargo run --release` from a command line.
-1. For routes that have diverged, inspect the relevant `..._diff.png` image in the screenshot directory. Differences are marked in orange.
+*. Run `cargo run --release` from a command line, from the project root directory.
+*. For routes that have diverged, inspect the relevant `..._diff.png` image in the screenshot directory. Differences are marked in orange.
 
 [install_rust]: https://www.rust-lang.org/tools/install
