@@ -4,10 +4,9 @@ use std::error::Error;
 use nitpx;
 use colored::*;
 use clap::{App, Arg, ArgMatches};
+use serde_json;
 
-fn test(url: &String) -> Result<(), Box<dyn Error>> {
-    let config = nitpx::config::make_config(None);
-
+fn test(url: &String, config: &nitpx::config::Config) -> Result<(), Box<dyn Error>> {
     let slug = url.replace(&config.trusted, "");
     println!("{}{}{}", "testing \"".underline(), &slug.underline(), "\"".underline());
 
@@ -31,11 +30,10 @@ fn test(url: &String) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn run_tests() -> Result<(), Box<dyn Error>> {
-    let urls = nitpx::url_utils::get_urls()?;
-    let config = nitpx::config::make_config(None);
+fn run_tests(config: &nitpx::config::Config) -> Result<(), Box<dyn Error>> {
+    let urls = nitpx::url_utils::get_urls(config)?;
 
-    let test_results = urls.iter().map(|url| (url, test(url)));
+    let test_results = urls.iter().map(|url| (url, test(url, config)));
     let mut passes: Vec<String> = vec![];
     let mut fails: Vec<String> = vec![];
     for (url, diff_result) in test_results {
@@ -95,19 +93,24 @@ fn map_match(matches: &ArgMatches, arg:  &str) -> Option<String> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let config_file_path = nitpx::config::get_config_file_path();
+
     let cli_result: ArgMatches = App::new("nitpx")
         .version("0.1.0")
         .about("Visual regression testing tool")
         .author("Nathaniel Allred <neallred@gmail.com>")
         .arg(Arg::with_name("config")
+            .long("config")
             .takes_value(true)
-            .help("Path to config file. Note that the usual precedence order still takes effect: command line arguments beat environment variables, which still beat config specified in this config file, which beats the program defaults")
+            .help(&format!("Path to config file. Note that the usual precedence order still takes effect: command line arguments beat environment variables, which still beat config specified in this config file, which beats the program defaults. If this flag is not passed, the operating system specific project dir will be used. On this machine, that is\n{}", config_file_path))
         )
         .arg(Arg::with_name("ignored")
+            .long("ignored")
             .takes_value(true)
             .help("Comma separated list of route slugs to ignore")
         )
         .arg(Arg::with_name("routes")
+            .long("routes")
             .takes_value(true)
             .help("Use \"sitemap\" to tell nitpx to generate urls to test from the trusted domain's sitemap.xml. Otherwise, pass a comma separate list of route slugs")
         )
@@ -132,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .help("Sets the trusted domain")
         )
         .arg(Arg::with_name("log_config")
-            .long("log_config")
+            .long("log-config")
             .help("log the computed config to stdout as JSON, then exit. Useful for debugging what config value is actually used and for sharing computed configs.")
         )
         .get_matches();
@@ -147,8 +150,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         testing: map_match(&cli_result, "testing"),
         trusted: map_match(&cli_result, "trusted"),
     };
-    nitpx::config::make_config(Some(cli_config));
-    run_tests()?;
+    let config = nitpx::config::get_config(&Some(cli_config));
+
+    if cli_result.is_present("log_config") {
+        println!("\nConfig as flags:\n");
+        println!("{}", nitpx::config::config_to_flags(&config));
+        println!("\nConfig as environment variables:");
+        println!("{}", nitpx::config::config_to_env(&config));
+        println!("\nConfig as JSON:\n");
+        println!("{}\n", serde_json::to_string_pretty(&config).expect("Failed to stringify config"));
+        std::process::exit(1);
+    }
+
+    run_tests(&config)?;
 
     Ok(())
 }

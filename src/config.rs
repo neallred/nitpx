@@ -1,21 +1,9 @@
 use std::env;
 use std::collections::HashSet;
 use url::Url;
+use directories::ProjectDirs;
 
-
-use std::sync::Once;
-static BLAH: String = String::from("");
-static mut CONFIG: Config = Config {
-    ignored: HashSet::new(),
-    routes: String::from(""),
-    screenshots: String::from(""),
-    threshold: 0.0,
-    testing: String::from(""),
-    trusted: String::from(""),
-};
-static INIT: Once = Once::new();
-
-#[derive(Hash, Clone, PartialEq, Eq)]
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub struct CliConfig {
     pub config: Option<String>,
     pub screenshots: Option<String>,
@@ -24,6 +12,34 @@ pub struct CliConfig {
     pub threshold: Option<String>,
     pub ignored: Option<String>,
     pub routes: Option<String>,
+}
+
+pub fn config_to_env(config: &Config) -> String {
+    format!("
+export NITPX_IGNORED=\"{}\"
+export NITPX_ROUTES=\"{}\"
+export NITPX_SCREENSHOTS=\"{}\"
+export NITPX_TESTING=\"{}\"
+export NITPX_THRESHOLD=\"{}\"
+export NITPX_TRUSTED=\"{}\"",
+        config.ignored.iter().map(|x| x.clone()).collect::<Vec<String>>().join(","),
+        config.routes,
+        config.screenshots,
+        config.testing,
+        config.threshold.to_string(),
+        config.trusted,
+    )
+}
+
+pub fn config_to_flags(config: &Config) -> String {
+    format!("--ignored {} --routes {} --screenshots {} --testing {} --threshold {} --trusted {}",
+        config.ignored.iter().map(|x| x.clone()).collect::<Vec<String>>().join(","),
+        config.routes,
+        config.screenshots,
+        config.testing,
+        config.threshold.to_string(),
+        config.trusted,
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,61 +68,117 @@ pub struct Config {
     pub trusted: String,
 }
 
-/// Gets or makes cached config. It only read's the environment once.
-/// cli is ignored on subsequent reads.
-pub fn make_config(cli: Option<CliConfig>) -> Config {
-    cached! {
-        CONFIG;
-        fn inner_make_config(cli_config: Option<CliConfig>) -> Config = {
-            let trusted = cli_config
-                .and_then(|cli| cli.trusted)
-                .unwrap_or_else(|| {
-                    env::var("NIT_PX_TRUSTED").unwrap_or_else(|_| {
-                        let default_trusted = String::from("https://crates.io/crates/headless_chrome/0.8.0/");
-                        println!("No trusted domain URL found in environment, command line, or config file. Defaulting to garbage value {}", default_trusted);
-                        default_trusted
-                    })
-                });
-            match Url::parse(&trusted) {
-                Ok(x) => {
-                    println!("parsed url fine: {}", &trusted)
-                },
-                Err(_) => panic!("bad url!"),
-            }
-
-            let testing = env::var("NIT_PX_TESTING").unwrap_or(
-                String::from("https://crates.io/crates/headless_chrome/0.9.0/")
-            );
-
-            let screenshots = env::var("NIT_PX_SCREENSHOTS").unwrap_or(
-                String::from("/home/username/github/nitpx/screenshots")
-            );
-
-            let ignored: HashSet<String> = if let Ok(x) = env::var("NIT_PX_IGNORED") {
-                x.split(',').map(|x| x.into()).collect()
-            } else {
-                HashSet::new()
-            };
-
-            let threshold: f64 = if let Ok(x) = env::var("NIT_PX_THRESHOLD") {
-                x.parse::<f64>().unwrap_or_else(|_| {
-                    println!("Bad value received for NIT_PX_THRESHOLD. Expected a stringified float, but received {}", x);
-                    0.0
-                })
-            } else {
-                0.0
-            };
-
-            Config {
-                routes: env::var("NIT_PX_ROUTES").unwrap_or(String::from("sitemap")),
-                ignored,
-                screenshots,
-                testing,
-                threshold,
-                trusted,
-            }
-        }
+fn assert_url(url: &String) -> () {
+    if let Err(x) = Url::parse(url) {
+        println!("Error parsing domain \"{}\": {:?}", url, x);
+        std::process::exit(1);
     }
+}
 
-    inner_make_config(cli)
+fn assert_threshold(threshold: f64) -> () {
+    if threshold < 0.0 || threshold > 100.0 {
+        println!("Threshold should be between 0 and 100. Received {}", threshold);
+        std::process::exit(1);
+    }
+}
+
+lazy_static! {
+    static ref PROJECT_DIRS: ProjectDirs = ProjectDirs::from("red.allthings", "nitpx", "nitpx").unwrap_or_else(|| {
+        println!("Unable to locate path to a project directory. Does the home directory exist? Exiting...\n");
+        std::process::exit(1);
+    });
+    static ref CONFIG_FILE_PATH: String = get_config_file_path_internal();
+}
+
+fn get_config_file_path_internal() -> String {
+    let config_folder_path = (&*PROJECT_DIRS).config_dir().to_str().unwrap_or_else(|| {
+        println!("Unable to locate path to a project config directory. Exiting...\n");
+        std::process::exit(1);
+    });
+
+    let mut config_file_path = String::from(config_folder_path.clone()); 
+    config_file_path.push_str("/config.json");
+    config_file_path
+}
+
+pub fn get_config_file_path() -> String {
+    CONFIG_FILE_PATH.clone()
+}
+
+pub fn get_config(cli_config: &Option<CliConfig>) -> Config {
+    println!("{:?}", cli_config);
+    let trusted = cli_config
+        .as_ref()
+        .and_then(|cli| cli.trusted.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_TRUSTED").unwrap_or_else(|_| {
+                println!("Could not find trusted domain in environment, command line, or config file. Exiting.");
+                std::process::exit(1);
+            })
+        });
+    assert_url(&trusted);
+
+    let testing = cli_config
+        .as_ref()
+        .and_then(|cli| cli.testing.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_TESTING").unwrap_or_else(|_| {
+                println!("Could not find testing domain in environment, command line, or config file. Exiting.");
+                std::process::exit(1);
+            })
+        });
+    assert_url(&testing);
+
+    let screenshots = cli_config
+        .as_ref()
+        .and_then(|cli| cli.screenshots.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_SCREENSHOTS").unwrap_or_else(|_| {
+                println!("Could not find screenshots directory in environment, command line, or config file. Exiting.");
+                std::process::exit(1);
+            })
+        });
+
+    let ignored: HashSet<String> = cli_config
+        .as_ref()
+        .and_then(|cli| cli.ignored.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_IGNORED").unwrap_or_else(|_| {
+                println!("No ignored routes: Testing all routes.");
+                String::from("")
+            })
+        }).split(',').map(|x| x.into()).collect();
+
+    let threshold: f64 = cli_config
+        .as_ref()
+        .and_then(|cli| cli.threshold.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_THRESHOLD").unwrap_or_else(|_| { String::from("") })
+        })
+        .parse::<f64>()
+        .unwrap_or_else(|_| {
+            println!("Bad threshold config value. Defaulting to 0.");
+            0.0
+        });
+
+    assert_threshold(threshold);
+
+    let routes = cli_config
+        .as_ref()
+        .and_then(|cli| cli.routes.clone())
+        .unwrap_or_else(|| {
+            env::var("NITPX_ROUTES").unwrap_or_else(|_| {
+                println!("No routes givne in in environment, command line, or config file. Defaulting to collect routes to test from trusted domain sitemap.");
+                std::process::exit(1);
+            })
+        });
+
+    Config {
+        routes,
+        ignored,
+        screenshots,
+        testing,
+        threshold,
+        trusted,
+    }
 }

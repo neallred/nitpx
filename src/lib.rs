@@ -11,12 +11,11 @@ extern crate serde;
 extern crate serde_xml_rs;
 
 #[macro_use]
-extern crate cached;
+extern crate lazy_static;
 
-pub mod config;
 pub mod browser;
 pub mod url_utils;
-
+pub mod config;
 
 // TODO: Better error for diffs
 #[derive(Debug)]
