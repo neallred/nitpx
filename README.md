@@ -8,17 +8,43 @@ Testing visual regressions is time consuming and error prone. This is a first li
 
 Pages with nondeterministic content or content that dynamically changes without user action will likely cause false positives.
 
-
 ## Setup
 *. Install [Rust][install_rust].
-*. Add the following environment variables, configuring values to your use case. The example below setup assumes a bash shell. Note that if `NIT_PX_ROUTES` is set to `"sitemap"`, It will look on the trusted domain for a `/sitemap.xml` and generate routes to test based on that.
+*. Set the configuration values (see below) to match your use case.
+
+Values can be specified in a JSON config file, added to the environment, or passed as flags. Priority order is flags, environment, JSON config file. If a JSON config file is present, it must have all values or the file won't be used and `nitpx` will rely on environment variables and command line flags. Note that if the routes value is `"sitemap"`, It will look on the trusted domain for a `/sitemap.xml` and generate routes to test based on that.
+
+Configuration values as environment variables (assumes a bash shell).
 
 ```
-export NIT_PX_ROUTES="blog,explore,about"
-export NIT_PX_IGNORED_ROUTES="huge-route,broken/route"
-export NIT_PX_SCREENSHOT_DIR="/path/to/where/you/want/to/store/screenshots"
-export NIT_PX_TESTING="https://changed.version-of.site/"
-export NIT_PX_TRUSTED="https://trusted.domain.com/"
+export NITPX_ROUTES="blog,explore,about"
+export NITPX_IGNORED="huge-route,broken/route"
+export NITPX_SCREENSHOTS="/path/to/where/you/want/to/store/screenshots"
+export NITPX_TESTING="https://changed.version-of.site/"
+export NITPX_TRUSTED="https://trusted.domain.com/"
+export NITPX_THRESHOLD="0"
+```
+
+Configuration values as a JSON config value. The default path to the JSON config follows the rust crate [`directories`]'s ProjectDirs config dir logic, and the file is named `config.json`. The use can pass an alternate, absolute path to a config file by passing the `--config` command line flag.
+
+```
+{
+  "ignored": [
+    "huge-route",
+    "broken/route"
+  ],
+  "routes": "blog,explore,about",
+  "screenshots": "/path/to/where/you/want/to/store/screenshots",
+  "threshold": 0.0,
+  "testing": "https://changed.version-of.site/",
+  "trusted": "https://trusted.domain.com/"
+}
+```
+
+Config as command line values
+
+```
+--ignored huge-route,broken/route --routes blog,explore,about --screenshots /path/to/where/you/want/to/store/screenshots --testing https://changed.version-of.site/ --threshold 0 --trusted https://trusted.domain.com/
 ```
 
 *. Run `cargo run --release` from a command line, from the project root directory.

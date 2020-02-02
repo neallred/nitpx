@@ -50,11 +50,10 @@ pub fn get_name_from_slug(slug: &String) -> String {
     }
 }
 
-pub fn get_urls() -> Result<Vec<String>, Box<dyn Error>> {
-    let the_config = super::config::make_config();
-    if the_config.routes == "sitemap" {
+pub fn get_urls(the_config: &crate::config::Config) -> Result<Vec<String>, Box<dyn Error>> {
+    if the_config.routes == String::from("sitemap") {
         println!("Getting urls to test from sitemap...");
-        let sitemap_location = String::from(the_config.trusted_url.clone() + "sitemap.xml");
+        let sitemap_location = String::from(the_config.trusted.clone() + "sitemap.xml");
         fetch_sitemap(&sitemap_location)
     } else {
         println!("Test urls provided by environment");
