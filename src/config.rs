@@ -2,6 +2,11 @@ use std::env;
 use std::collections::HashSet;
 use url::Url;
 use directories::ProjectDirs;
+use std::fs::File;
+use std::io::{BufReader, Read};
+
+use serde;
+use serde_json;
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub struct CliConfig {
@@ -40,6 +45,28 @@ pub fn config_to_flags(config: &Config) -> String {
         config.threshold.to_string(),
         config.trusted,
     )
+}
+
+pub fn read_json_file<T: std::fmt::Debug + serde::de::DeserializeOwned + serde::ser::Serialize>(filename: &String) -> Option<T> {
+    let file = File::open(filename);
+    if file.is_err() {
+        println!("Unable to read json config file \"{}\": {:?}\nAll required config values will need to be present in flags or the environment.\n", filename, file);
+        return None;
+    }
+    let mut buffered_reader = BufReader::new(file.unwrap());
+    let mut contents = String::new();
+    let _number_of_bytes: usize = match buffered_reader.read_to_string(&mut contents) {
+        Ok(number_of_bytes) => number_of_bytes,
+        Err(_err) => 0,
+    };
+
+    let parsed: Result<T, serde_json::error::Error> = serde_json::from_str(&contents);
+
+    if parsed.is_err() {
+        println!("Error parsing json config file \"{}\": {:?}\nAll required config values will need to be present in flags or the environment.\n", filename, parsed);
+    }
+
+    parsed.ok()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,71 +132,98 @@ pub fn get_config_file_path() -> String {
     CONFIG_FILE_PATH.clone()
 }
 
-pub fn get_config(cli_config: &Option<CliConfig>) -> Config {
+pub fn get_config(cli_config: &CliConfig) -> Config {
+    let config_file_path = cli_config.config.clone().unwrap_or_else(|| get_config_file_path());
+    let file_config: Option<Config> = read_json_file(&config_file_path);
+
     println!("{:?}", cli_config);
-    let trusted = cli_config
-        .as_ref()
-        .and_then(|cli| cli.trusted.clone())
+    let trusted = cli_config.trusted
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_TRUSTED").unwrap_or_else(|_| {
-                println!("Could not find trusted domain in environment, command line, or config file. Exiting.");
-                std::process::exit(1);
+                match &file_config {
+                    Some(file_config) => file_config.trusted.clone(),
+                    None => {
+                        println!("Could not find trusted domain in environment, command line, or config file. Exiting.");
+                        std::process::exit(1);
+                    }
+                }
             })
         });
     assert_url(&trusted);
 
-    let testing = cli_config
-        .as_ref()
-        .and_then(|cli| cli.testing.clone())
+    let testing = cli_config.testing
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_TESTING").unwrap_or_else(|_| {
-                println!("Could not find testing domain in environment, command line, or config file. Exiting.");
-                std::process::exit(1);
+                match &file_config {
+                    Some(file_config) => file_config.testing.clone(),
+                    None => {
+                        println!("Could not find testing domain in environment, command line, or config file. Exiting.");
+                        std::process::exit(1);
+                    }
+                }
             })
         });
     assert_url(&testing);
 
-    let screenshots = cli_config
-        .as_ref()
-        .and_then(|cli| cli.screenshots.clone())
+    let screenshots = cli_config.screenshots
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_SCREENSHOTS").unwrap_or_else(|_| {
-                println!("Could not find screenshots directory in environment, command line, or config file. Exiting.");
-                std::process::exit(1);
+                match &file_config {
+                    Some(file_config) => file_config.screenshots.clone(),
+                    None => {
+                        println!("Could not find screenshots directory in environment, command line, or config file. Exiting.");
+                        std::process::exit(1);
+                    }
+                }
             })
         });
 
-    let ignored: HashSet<String> = cli_config
-        .as_ref()
-        .and_then(|cli| cli.ignored.clone())
+    let ignored: HashSet<String> = cli_config.ignored
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_IGNORED").unwrap_or_else(|_| {
-                println!("No ignored routes: Testing all routes.");
-                String::from("")
+                match &file_config {
+                    Some(file_config) => file_config.ignored.iter().map(|x| x.clone()).collect::<Vec<String>>().join(","),
+                    None => {
+                        println!("No ignored routes: Testing all routes.");
+                        String::from("")
+                    }
+                }
             })
         }).split(',').map(|x| x.into()).collect();
 
-    let threshold: f64 = cli_config
-        .as_ref()
-        .and_then(|cli| cli.threshold.clone())
+    let threshold: f64 = cli_config.threshold
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_THRESHOLD").unwrap_or_else(|_| { String::from("") })
         })
         .parse::<f64>()
         .unwrap_or_else(|_| {
-            println!("Bad threshold config value. Defaulting to 0.");
-            0.0
+            match &file_config {
+                Some(file_config) => file_config.threshold.clone(),
+                None => {
+                    println!("Bad threshold config value. Defaulting to 0.");
+                    0.0
+                }
+            }
         });
 
     assert_threshold(threshold);
 
-    let routes = cli_config
-        .as_ref()
-        .and_then(|cli| cli.routes.clone())
+    let routes = cli_config.routes
+        .clone()
         .unwrap_or_else(|| {
             env::var("NITPX_ROUTES").unwrap_or_else(|_| {
-                println!("No routes givne in in environment, command line, or config file. Defaulting to collect routes to test from trusted domain sitemap.");
-                std::process::exit(1);
+                match &file_config {
+                    Some(file_config) => file_config.routes.clone(),
+                    None => {
+                        println!("No routes given in in environment, command line, or config file. Defaulting to collect routes to test from trusted domain sitemap.");
+                        String::from("sitemap")
+                    }
+                }
             })
         });
 

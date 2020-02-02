@@ -150,7 +150,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         testing: map_match(&cli_result, "testing"),
         trusted: map_match(&cli_result, "trusted"),
     };
-    let config = nitpx::config::get_config(&Some(cli_config));
+    let config = nitpx::config::get_config(&cli_config);
 
     if cli_result.is_present("log_config") {
         println!("\nConfig as flags:\n");
