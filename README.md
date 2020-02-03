@@ -2,6 +2,20 @@
 
 A tool to test versions of sites against each other for visual changes.
 
+## Epigraph
+```
+Ants, beetles, roaches brown,
+Silently creep,
+Bringing coders frown.
+
+Staring eyes, seeing not,
+A noggin feed
+Pictures detail fraught.
+
+Did one change, or are both equal?
+Will shipping mean a quick sequel?
+```
+
 ## Explanation
 
 Testing visual regressions is time consuming and error prone. This is a first line of defense tool that inspects pages as they render initially, before user interaction. As diffing images can be very slow and the number of URLs in a site and size of individual pages can be very large, this tool prioritizes diffing speed and discovering what content changed over providing clean, precise diffs.
