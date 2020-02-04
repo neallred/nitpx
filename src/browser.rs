@@ -30,9 +30,9 @@ fn calculate_render_sleep(px_in_capture: &u32) -> Duration {
     Duration::from_micros((30_000 + px_in_capture / 10).into())
 }
 
-pub fn make_browser() -> Result<Browser, Box<dyn Error>> {
+pub fn make_browser(config: &crate::config::Config) -> Result<Browser, Box<dyn Error>> {
     let browser_options = LaunchOptionsBuilder::default()
-        .headless(true)
+        .headless(config.headless)
         .window_size(Some((1600, 1000)))
         .idle_browser_timeout(Duration::new(40, 0))
         .build()?;
@@ -42,17 +42,18 @@ pub fn make_browser() -> Result<Browser, Box<dyn Error>> {
 }
 
 pub fn capture_snapshots(
-    trusted_domain: &String,
-    testing_domain: &String,
+    config: &crate::config::Config,
     slug: &String,
 ) -> Result<bool, Box<dyn Error>> {
+    let trusted_domain = &config.trusted;
+    let testing_domain = &config.testing;
 
     // We make a new browser per test, because a given browser stops responding
     // after about 20-23 tests.
     // Maybe there's a cleanup bug and tabs are not properly closed?
     // It would be more efficient to reuse the same browser for the whole suite.
 
-    let browser = make_browser()?;
+    let browser = make_browser(config)?;
     let pic_name = url_utils::get_name_from_slug(&slug);
 
     let filepath_trusted = format!("screenshots/{}_trusted.png", pic_name);
@@ -124,13 +125,15 @@ pub fn capture_snapshots(
     // so that testing doesn't get focused elements that trusted url doesn't get
     body.move_mouse_over()?;
 
+    println!("setting bounds");
     tab.set_bounds(Bounds::Normal {
         left: None,
-        top: None,
+        top: Some(0),
         width: Some(1600),
         height: None,
     })?;
 
+    println!("getting html box model");
     let content_size = tab.wait_for_element("html")?
         .get_box_model()?;
     let viewport = content_size.margin_viewport();

@@ -11,6 +11,7 @@ use serde_json;
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub struct CliConfig {
     pub config: Option<String>,
+    pub noheadless: bool,
     pub screenshots: Option<String>,
     pub testing: Option<String>,
     pub trusted: Option<String>,
@@ -21,12 +22,14 @@ pub struct CliConfig {
 
 pub fn config_to_env(config: &Config) -> String {
     format!("
+export NITPX_HEADLESS=\"{}\"
 export NITPX_IGNORED=\"{}\"
 export NITPX_ROUTES=\"{}\"
 export NITPX_SCREENSHOTS=\"{}\"
 export NITPX_TESTING=\"{}\"
 export NITPX_THRESHOLD=\"{}\"
 export NITPX_TRUSTED=\"{}\"",
+        config.headless,
         config.ignored.iter().map(|x| x.clone()).collect::<Vec<String>>().join(","),
         config.routes,
         config.screenshots,
@@ -37,7 +40,8 @@ export NITPX_TRUSTED=\"{}\"",
 }
 
 pub fn config_to_flags(config: &Config) -> String {
-    format!("--ignored {} --routes {} --screenshots {} --testing {} --threshold {} --trusted {}",
+    format!("--headless {} --ignored {} --routes {} --screenshots {} --testing {} --threshold {} --trusted {}",
+        config.headless,
         config.ignored.iter().map(|x| x.clone()).collect::<Vec<String>>().join(","),
         config.routes,
         config.screenshots,
@@ -71,6 +75,10 @@ pub fn read_json_file<T: std::fmt::Debug + serde::de::DeserializeOwned + serde::
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Useful for debugging. Also, some browsers have issues setting large window heights and
+    /// return a negative top that explodes rust headless chrome, which expects a non-negative
+    /// integer. This provides a workaround.
+    pub headless: bool,
     /// Some pages may have problematic HTML that won't parse
     /// or be so large the browser times out.
     /// This provides a way to ignore those routes.
@@ -137,6 +145,23 @@ pub fn get_config(cli_config: &CliConfig) -> Config {
     let file_config: Option<Config> = read_json_file(&config_file_path);
 
     println!("{:?}", cli_config);
+
+    let headless: bool = if cli_config.noheadless {
+        false
+    } else {
+        env::var("NITPX_HEADLESS")
+            .and_then(|x| Ok(x != "false"))
+            .unwrap_or_else(|_| {
+                match &file_config {
+                    Some(file_config) => file_config.headless,
+                    None => {
+                        println!("Could not find headless flag. Defaulting to true");
+                        true
+                    }
+                }
+            })
+    };
+
     let trusted = cli_config.trusted
         .clone()
         .unwrap_or_else(|| {
@@ -228,6 +253,7 @@ pub fn get_config(cli_config: &CliConfig) -> Config {
         });
 
     Config {
+        headless,
         routes,
         ignored,
         screenshots,

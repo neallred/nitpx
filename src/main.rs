@@ -15,8 +15,7 @@ fn test(url: &String, config: &nitpx::config::Config) -> Result<(), Box<dyn Erro
         Err(Box::new(nitpx::SkipError::new()))
     } else {
         let images_identical = nitpx::browser::capture_snapshots(
-            &config.trusted,
-            &config.testing,
+            config,
             &slug,
         )?;
 
@@ -104,6 +103,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             .takes_value(true)
             .help(&format!("Path to config file. Note that the usual precedence order still takes effect: command line arguments beat environment variables, which still beat config specified in this config file, which beats the program defaults. If this flag is not passed, the operating system specific project dir will be used. On this machine, that is\n{}", config_file_path))
         )
+        .arg(Arg::with_name("noheadless")
+            .long("noheadless")
+            .help("If present, show browser")
+        )
         .arg(Arg::with_name("ignored")
             .long("ignored")
             .takes_value(true)
@@ -143,6 +146,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cli_config = nitpx::config::CliConfig {
         config: map_match(&cli_result, "config"),
+        noheadless: cli_result.is_present("noheadless"),
         ignored: map_match(&cli_result, "ignored"),
         routes: map_match(&cli_result, "routes"),
         screenshots: map_match(&cli_result, "screenshots"),
