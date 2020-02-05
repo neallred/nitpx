@@ -56,8 +56,8 @@ pub fn capture_snapshots(
     let browser = make_browser(config)?;
     let pic_name = url_utils::get_name_from_slug(&slug);
 
-    let filepath_trusted = format!("screenshots/{}_trusted.png", pic_name);
-    let filepath_testing = format!("screenshots/{}_testing.png", pic_name);
+    let filepath_trusted = format!("{}/{}_trusted.png", config.screenshots, pic_name);
+    let filepath_testing = format!("{}/{}_testing.png", config.screenshots, pic_name);
 
     println!("{}", "trusted url...".blue().dimmed());
     let tab = browser.new_tab()?;
