@@ -10,12 +10,13 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_xml_rs;
 
-#[macro_use]
-extern crate lazy_static;
+#[macro_use] 
+extern crate cached;
 
+pub mod config;
 pub mod browser;
 pub mod url_utils;
-pub mod config;
+
 
 // TODO: Better error for diffs
 #[derive(Debug)]
@@ -38,31 +39,6 @@ impl fmt::Display for DiffError {
 impl Error for DiffError {
     fn description(&self) -> &str {
         "still no num in this str"
-        // format!("{}", %self.pct_diff)
-        // String::from(self.pct_diff.to_string().clone())
-    }
-}
-
-// TODO: Better error for diffs
-#[derive(Debug)]
-pub struct SkipError {
-}
-
-impl SkipError {
-    pub fn new() -> SkipError {
-        SkipError{}
-    }
-}
-
-impl fmt::Display for SkipError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"skip")
-    }
-}
-
-impl Error for SkipError {
-    fn description(&self) -> &str {
-        "what goes here?"
         // format!("{}", %self.pct_diff)
         // String::from(self.pct_diff.to_string().clone())
     }
